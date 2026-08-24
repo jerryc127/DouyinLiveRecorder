@@ -1,14 +1,25 @@
 # -*- coding: utf-8 -*-
 import asyncio
+from streamget import DouyinLiveStream
 from src.logger import logger
 from src import spider
+
+
+async def get_douyin_stream_info(url: str, proxy_addr=None, cookies=None):
+    live_stream = DouyinLiveStream(proxy_addr=proxy_addr, cookies=cookies)
+    if 'v.douyin.com' in url or '/user/' in url:
+        json_data = await live_stream.fetch_app_stream_data(url=url)
+    else:
+        json_data = await live_stream.fetch_web_stream_data(url=url)
+    return await live_stream.fetch_stream_url(json_data, "OD")
+
 
 # 以下示例直播间链接不保证时效性，请自行查看链接是否能正常访问
 # Please note that the following example live room links may not be up-to-date
 LIVE_STREAM_CONFIG = {
     "douyin": {
-        "url": "https://live.douyin.com/745964462470",
-        "func": spider.get_douyin_app_stream_data,
+        "url": "https://v.douyin.com/iQFeBnt/",
+        "func": get_douyin_stream_info,
     },
     "tiktok": {
         "url": "https://www.tiktok.com/@pearlgaga88/live",
