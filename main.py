@@ -584,7 +584,12 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                         with semaphore:
                             live_stream = DouyinLiveStream(proxy_addr=proxy_address, cookies=dy_cookie)
                             if 'v.douyin.com' in record_url or '/user/' in record_url:
-                                json_data = asyncio.run(live_stream.fetch_app_stream_data(url=record_url))
+                                try:
+                                    json_data = asyncio.run(live_stream.fetch_app_stream_data(url=record_url))
+                                except Exception:
+                                    logger.warning(f"抖音短連結解析異常，2秒後重試一次...")
+                                    time.sleep(2)
+                                    json_data = asyncio.run(live_stream.fetch_app_stream_data(url=record_url))
                             else:
                                 json_data = asyncio.run(live_stream.fetch_web_stream_data(url=record_url))
                             stream_data = asyncio.run(live_stream.fetch_stream_url(json_data, record_quality))
