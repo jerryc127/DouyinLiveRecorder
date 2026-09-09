@@ -9,7 +9,7 @@ fi
 
 record_name="$1"
 file_path="$2"
-remote_dir="myw:DouyinLiveRecorder/${record_name}"
+remote_dir="myw:DouyinLiveRecorder"
 
 if ! command -v rclone >/dev/null 2>&1; then
     echo "找不到 rclone，請先安裝並執行 rclone config" >&2
@@ -45,7 +45,9 @@ for upload_file in "${files[@]}"; do
         --multi-thread-streams 4 \
         --drive-chunk-size 64M \
         --retries 3 \
-        --low-level-retries 10
+        --low-level-retries 10 \
+        --log-file=/app/logs/rclone.log \
+        --log-level=INFO
 
     if [ "$?" -ne 0 ]; then
         echo "上傳失敗：$upload_file" >&2

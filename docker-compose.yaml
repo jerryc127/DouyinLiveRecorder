@@ -13,4 +13,5 @@ services:
       - ./logs:/app/logs
       - ./backup_config:/app/backup_config
       - ./downloads:/app/downloads
+      - /root/.config/rclone:/root/.config/rclone:ro
     restart: always
