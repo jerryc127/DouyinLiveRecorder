@@ -14,6 +14,9 @@ on:
 jobs:
   build_and_push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout code
@@ -33,12 +36,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      - name: Log in to Docker Hub
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-          registry: docker.io
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -47,8 +50,8 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ihmily/douyin-live-recorder:${{ github.event.inputs.tag_name || github.ref_name }} 
-            ihmily/douyin-live-recorder:latest
+            ghcr.io/${{ github.repository_owner }}/douyin-live-recorder:${{ github.event.inputs.tag_name || github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/douyin-live-recorder:latest
           platforms: linux/amd64,linux/arm64
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
