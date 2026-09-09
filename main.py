@@ -375,6 +375,60 @@ def run_script(command: str) -> None:
         logger.error('Please add `#!/bin/bash` at the beginning of your bash script file.')
 
 
+def run_custom_script(record_name: str, save_file_path: str, save_type: str, script_command: str) -> None:
+    script_file_path = save_file_path
+    if converts_to_mp4 and not split_video_by_time and save_type in ('TS', 'FLV'):
+        script_file_path = save_file_path.rsplit('.', maxsplit=1)[0] + '.mp4'
+
+    logger.debug("开始执行脚本命令!")
+    if "python" in script_command.lower():
+        params = [
+            f'--record_name "{record_name}"',
+            f'--save_file_path "{script_file_path}"',
+            f'--save_type {save_type}',
+            f'--split_video_by_time {split_video_by_time}',
+            f'--converts_to_mp4 {converts_to_mp4}',
+        ]
+    else:
+        params = [
+            f'"{record_name.split(" ", maxsplit=1)[-1]}"',
+            f'"{script_file_path}"',
+            save_type,
+            f'split_video_by_time:{split_video_by_time}',
+            f'converts_to_mp4:{converts_to_mp4}'
+        ]
+    run_script(script_command.strip() + ' ' + ' '.join(params))
+    logger.debug("脚本命令执行结束!")
+
+
+def convert_recorded_files(save_file_path: str, save_type: str) -> bool:
+    if not converts_to_mp4 or save_type not in ('TS', 'FLV'):
+        return True
+
+    if split_video_by_time:
+        directory = os.path.dirname(save_file_path)
+        prefix = os.path.basename(save_file_path).rsplit('_', maxsplit=1)[0]
+        source_paths = [
+            path for path in utils.get_file_paths(directory)
+            if prefix in os.path.basename(path) and path.lower().endswith(f'.{save_type.lower()}')
+        ]
+    else:
+        source_paths = [save_file_path]
+
+    if not source_paths:
+        logger.error(f"未找到待转码文件: {save_file_path}")
+        return False
+
+    conversion_succeeded = True
+    for source_path in source_paths:
+        converts_mp4(source_path, delete_origin_file)
+        output_path = source_path.rsplit('.', maxsplit=1)[0] + '.mp4'
+        if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+            conversion_succeeded = False
+            logger.error(f"转码失败或未生成输出文件: {output_path}")
+    return conversion_succeeded
+
+
 def clear_record_info(record_name: str, record_url: str) -> None:
     global monitoring
     recording.discard(record_name)
@@ -453,38 +507,10 @@ def check_subprocess(record_name: str, record_url: str, ffmpeg_command: list, sa
     return_code = process.returncode
     stop_time = time.strftime('%Y-%m-%d %H:%M:%S')
     if return_code == 0:
-        if converts_to_mp4 and save_type == 'TS':
-            if split_video_by_time:
-                file_paths = utils.get_file_paths(os.path.dirname(save_file_path))
-                prefix = os.path.basename(save_file_path).rsplit('_', maxsplit=1)[0]
-                for path in file_paths:
-                    if prefix in path:
-                        threading.Thread(target=converts_mp4, args=(path, delete_origin_file)).start()
-            else:
-                threading.Thread(target=converts_mp4, args=(save_file_path, delete_origin_file)).start()
         print(f"\n{record_name} {stop_time} 直播录制完成\n")
 
-        if script_command:
-            logger.debug("开始执行脚本命令!")
-            if "python" in script_command:
-                params = [
-                    f'--record_name "{record_name}"',
-                    f'--save_file_path "{save_file_path}"',
-                    f'--save_type {save_type}',
-                    f'--split_video_by_time {split_video_by_time}',
-                    f'--converts_to_mp4 {converts_to_mp4}',
-                ]
-            else:
-                params = [
-                    f'"{record_name.split(" ", maxsplit=1)[-1]}"',
-                    f'"{save_file_path}"',
-                    save_type,
-                    f'split_video_by_time:{split_video_by_time}',
-                    f'converts_to_mp4:{converts_to_mp4}'
-                ]
-            script_command = script_command.strip() + ' ' + ' '.join(params)
-            run_script(script_command)
-            logger.debug("脚本命令执行结束!")
+        if convert_recorded_files(save_file_path, save_type) and script_command:
+            run_custom_script(record_name, save_file_path, save_type, script_command)
 
     else:
         color_obj.print_colored(f"\n{record_name} {stop_time} 直播录制出错,返回码: {return_code}\n", color_obj.RED)
@@ -1270,6 +1296,11 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                             )
 
                                             if download_success:
+                                                conversion_succeeded = convert_recorded_files(save_file_path, "FLV")
+                                                if conversion_succeeded and custom_script:
+                                                    run_custom_script(
+                                                        record_name, save_file_path, "FLV", custom_script
+                                                    )
                                                 record_finished = True
                                                 print(
                                                     f"\n{anchor_name} {time.strftime('%Y-%m-%d %H:%M:%S')} 直播录制完成\n")
@@ -1334,32 +1365,6 @@ def start_record(url_data: tuple, count_variable: int = -1) -> None:
                                         with max_request_lock:
                                             error_count += 1
                                             error_window.append(1)
-
-                                    try:
-                                        if converts_to_mp4:
-                                            seg_file_path = f"{full_path}/{anchor_name}_{title_in_name}{now}_%03d.mp4"
-                                            if split_video_by_time:
-                                                segment_video(
-                                                    save_file_path, seg_file_path,
-                                                    segment_format='mp4', segment_time=split_time,
-                                                    is_original_delete=delete_origin_file
-                                                )
-                                            else:
-                                                threading.Thread(
-                                                    target=converts_mp4,
-                                                    args=(save_file_path, delete_origin_file)
-                                                ).start()
-
-                                        else:
-                                            seg_file_path = f"{full_path}/{anchor_name}_{title_in_name}{now}_%03d.flv"
-                                            if split_video_by_time:
-                                                segment_video(
-                                                    save_file_path, seg_file_path,
-                                                    segment_format='flv', segment_time=split_time,
-                                                    is_original_delete=delete_origin_file
-                                                )
-                                    except Exception as e:
-                                        logger.error(f"转码失败: {e} ")
 
                                 elif record_save_type == "MKV":
                                     filename = anchor_name + f'_{title_in_name}' + now + ".mkv"
@@ -1689,10 +1694,19 @@ def read_config_value(config_parser: configparser.RawConfigParser, section: str,
         return default_value
 
 
+def get_bool_option(value: Any, default: bool = False) -> bool:
+    normalized_value = str(value).strip().lower()
+    if normalized_value in {"是", "yes", "true", "1", "on"}:
+        return True
+    if normalized_value in {"否", "no", "false", "0", "off"}:
+        return False
+    return default
+
+
 options = {"是": True, "否": False}
 config = configparser.RawConfigParser()
 language = read_config_value(config, '录制设置', 'language(zh_cn/en)', "zh_cn")
-skip_proxy_check = options.get(read_config_value(config, '录制设置', '是否跳过代理检测(是/否)', "否"), False)
+skip_proxy_check = get_bool_option(read_config_value(config, '录制设置', '是否跳过代理检测(是/否)', "否"))
 if language and 'en' not in language.lower():
     from i18n import translated_print
 
@@ -1754,15 +1768,19 @@ while True:
     local_delay_default = int(read_config_value(config, '录制设置', '排队读取网址时间(秒)', 0))
     loop_time = options.get(read_config_value(config, '录制设置', '是否显示循环秒数', "否"), False)
     show_url = options.get(read_config_value(config, '录制设置', '是否显示直播源地址', "否"), False)
-    split_video_by_time = options.get(read_config_value(config, '录制设置', '分段录制是否开启', "否"), False)
+    split_video_by_time = get_bool_option(read_config_value(config, '录制设置', '分段录制是否开启', "否"))
     enable_https_recording = options.get(read_config_value(config, '录制设置', '是否强制启用https录制', "否"), False)
     disk_space_limit = float(read_config_value(config, '录制设置', '录制空间剩余阈值(gb)', 1.0))
     split_time = str(read_config_value(config, '录制设置', '视频分段时间(秒)', 1800))
-    converts_to_mp4 = options.get(read_config_value(config, '录制设置', '录制完成后自动转为mp4格式', "否"), False)
-    converts_to_h264 = options.get(read_config_value(config, '录制设置', 'mp4格式重新编码为h264', "否"), False)
-    delete_origin_file = options.get(read_config_value(config, '录制设置', '追加格式后删除原文件', "否"), False)
-    create_time_file = options.get(read_config_value(config, '录制设置', '生成时间字幕文件', "否"), False)
-    is_run_script = options.get(read_config_value(config, '录制设置', '是否录制完成后执行自定义脚本', "否"), False)
+    converts_to_mp4 = get_bool_option(
+        read_config_value(config, '录制设置', '录制完成后自动转为mp4格式', "否")
+    )
+    converts_to_h264 = get_bool_option(read_config_value(config, '录制设置', 'mp4格式重新编码为h264', "否"))
+    delete_origin_file = get_bool_option(read_config_value(config, '录制设置', '追加格式后删除原文件', "否"))
+    create_time_file = get_bool_option(read_config_value(config, '录制设置', '生成时间字幕文件', "否"))
+    is_run_script = get_bool_option(
+        read_config_value(config, '录制设置', '是否录制完成后执行自定义脚本', "否")
+    )
     custom_script = read_config_value(config, '录制设置', '自定义脚本执行命令', "") if is_run_script else None
     enable_proxy_platform = read_config_value(
         config, '录制设置', '使用代理录制的平台(逗号分隔)',
