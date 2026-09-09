@@ -2,6 +2,11 @@
 
 set -u
 
+log_file="/app/logs/upload_to_gdrive.log"
+mkdir -p "$(dirname "$log_file")"
+exec >>"$log_file" 2>&1
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] 腳本啟動，參數數量=$#"
+
 if [ "$#" -lt 2 ]; then
     echo "用法: $0 <record_name> <file_path> [save_type]" >&2
     exit 2
@@ -10,11 +15,13 @@ fi
 record_name="$1"
 file_path="$2"
 remote_dir="myw:DouyinLiveRecorder"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] record_name=$record_name file_path=$file_path"
 
 if ! command -v rclone >/dev/null 2>&1; then
     echo "找不到 rclone，請先安裝並執行 rclone config" >&2
     exit 1
 fi
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] rclone=$(command -v rclone)"
 
 files=()
 if [[ "$file_path" == *"%03d"* ]]; then
@@ -30,6 +37,7 @@ if [ "${#files[@]}" -eq 0 ]; then
     echo "找不到要上傳的檔案：$file_path" >&2
     exit 1
 fi
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] 待上傳檔案數量=${#files[@]}"
 
 for upload_file in "${files[@]}"; do
     if [ ! -s "$upload_file" ]; then
@@ -37,7 +45,7 @@ for upload_file in "${files[@]}"; do
         continue
     fi
 
-    echo "開始上傳：$upload_file"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 開始上傳：$upload_file"
     rclone copyto "$upload_file" \
         "$remote_dir/$(basename "$upload_file")" \
         --transfers 1 \
@@ -53,6 +61,7 @@ for upload_file in "${files[@]}"; do
         echo "上傳失敗：$upload_file" >&2
         exit 1
     fi
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] rclone 上傳成功：$upload_file"
 
     if rm -f "$upload_file"; then
         echo "已刪除本機檔案：$upload_file"
