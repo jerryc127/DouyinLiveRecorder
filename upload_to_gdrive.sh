@@ -17,6 +17,14 @@ file_path="$2"
 remote_dir="myw:DouyinLiveRecorder"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] record_name=$record_name file_path=$file_path"
 
+if [[ "$file_path" == *"%03d"* && ! -e "${file_path//%03d/*}" ]]; then
+    converted_file_path="${file_path%.*}.mp4"
+    if compgen -G "${converted_file_path//%03d/*}" >/dev/null 2>&1; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 找不到原始分段檔，改用轉檔後檔案：$converted_file_path"
+        file_path="$converted_file_path"
+    fi
+fi
+
 if ! command -v rclone >/dev/null 2>&1; then
     echo "找不到 rclone，請先安裝並執行 rclone config" >&2
     exit 1
