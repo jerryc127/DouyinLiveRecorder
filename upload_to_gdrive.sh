@@ -15,13 +15,19 @@ fi
 record_name="$1"
 file_path="$2"
 remote_dir="myw:DouyinLiveRecorder"
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] record_name=$record_name file_path=$file_path"
+save_type="${3:-}"
+split_option="${4:-}"
+convert_option="${5:-}"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] record_name=$record_name file_path=$file_path save_type=$save_type $split_option $convert_option"
 
 if [[ "$file_path" == *"%03d"* && ! -e "${file_path//%03d/*}" ]]; then
     converted_file_path="${file_path%.*}.mp4"
     if compgen -G "${converted_file_path//%03d/*}" >/dev/null 2>&1; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] 找不到原始分段檔，改用轉檔後檔案：$converted_file_path"
         file_path="$converted_file_path"
+    elif [[ "$convert_option" == "converts_to_mp4:True" ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 已啟用 MP4 轉檔，但找不到 MP4 分段檔，停止上傳 TS：$file_path" >&2
+        exit 1
     fi
 fi
 
